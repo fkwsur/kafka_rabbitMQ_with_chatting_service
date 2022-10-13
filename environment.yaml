@@ -1,0 +1,12 @@
+ProductionVersion : 1
+mysql:
+  MYSQL_DB : ""
+  MYSQL_DB_USER : ""
+  MYSQL_DB_HOST : ""
+  MYSQL_DB_PASSWORD : ""
+
+local_mysql:
+  MYSQL_DB : "rootdb"
+  MYSQL_DB_USER : "root"
+  MYSQL_DB_HOST : "127.0.0.1"
+  MYSQL_DB_PASSWORD : ""
