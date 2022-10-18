@@ -6,7 +6,7 @@ const { PORT  } = process.env;
 dotenv.config();
 const cors = require('cors');
 const db = require('./model') 
-
+const rabbitmq = require('./service/rabbitmq')
 db.sequelize
 .authenticate()
 .then(async () => {
@@ -41,3 +41,6 @@ socket.io.attach(http_server,{
 });
 // socket.Kafka();
 socket.RabbitMq();
+
+
+rabbitmq.Consume();

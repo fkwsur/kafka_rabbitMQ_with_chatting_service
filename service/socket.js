@@ -25,11 +25,7 @@ const kafkaConnect = async () => {
   };
 
 // 레빗엠큐
-const Rabbitmq = require("./rabbitmq");
-const url = "amqp://localhost"; //rabbitmq url
-const queue = "web_msg"; //임시 queue이름이고 필요한 상황에 맞게 이름 따로 지정해줘야 한다.
-const conn = new Rabbitmq(url, queue);
-
+const rabbitmq = require('./rabbitmq')
 
 
 module.exports = { 
@@ -159,8 +155,7 @@ module.exports = {
         socket.on('msg', async (msg) => {
           try{
             await io.to(msg.roomName).emit('msg',msg);
-
-            await conn.send_message(msg);
+            await rabbitmq.Produce(JSON.stringify(msg));           
           }catch (err) {
             console.log(err);
           }
@@ -190,53 +185,7 @@ module.exports = {
               console.log(e);
             }
           });
-
-  
     });
-  
-    //rabbitmq 
-    const consumerRun = async () => {
-      let globalArr = [];
-      
-      const msg = await conn.recv_message();
-      globalArr.push(JSON.parse(msg))
-      const timer = (i) => {
-        setTimeout(async() => {
-          console.log("checkVal :", i, "globalArr : ", globalArr.length);
-          if (i == globalArr.length) {
-            console.log("1초동안 응답x 여기다가 넣는 로직넣으면 됨")
-            try {
-              console.log(globalArr)
-              const rows = await chatting.bulkCreate(globalArr, {
-                  ignoreDuplicates: true,
-                });
-                if(!rows) throw error
-                console.log(rows)
-                globalArr = [];
-              } catch (err) {
-                console.log(err, "잘못된 데이터로 인해 넣기 실패")
-             }
-          }
-        }, 1000);
-      }
-      timer(globalArr.length.toString());    
 
-      if (globalArr.length >= 5 ) { 
-          try {
-            console.log(globalArr)
-            const rows = await chatting.bulkCreate(globalArr, {
-                ignoreDuplicates: true,
-              });
-              if(!rows) throw error
-              console.log(rows)
-              globalArr = [];
-            } catch (err) {
-              console.log(err, "잘못된 데이터로 인해 넣기 실패")
-           }
-      }
-    }
-  
-    consumerRun().catch(err => console.log("rabbitmq err : ", err))
   }
-  
-};
+  };

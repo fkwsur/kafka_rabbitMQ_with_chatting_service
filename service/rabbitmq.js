@@ -1,87 +1,75 @@
 const amqp = require("amqplib");
 
-class RabbitmqWrapper {
-  constructor(url, queueName, options) {
-    // 객체 초기화
-    this._url = url;
-    this._queueName = queueName;
-    this._options = options || {};
+const amqpURL = "amqp://localhost:5672";
+const { chatting } = require('../model');
 
-    // public
-    this.channel = undefined;
-    this.queue = undefined;
-  }
-
-  // 커넥트 생성하고 채널 연결
-  async setup() {
-    const connect = await amqp.connect(this._url); //mysqlconnect
-    const channel = await connect.createChannel(); //mysql-database
-    this.channel = channel;
-  }
-
-  // 채널에다가 queue 만들어주기 queue는 메세지를 수신 받을 수 있는 이름
-  async assertQueue() {
-    const queue = await this.channel.assertQueue(this._queueName, {
-      durable: false, // false는 볼 때까지 보관, true는 일정시간이 지나면 사라짐,
-    });
-    this.queue = queue;
-  }
-
-  // queue에 데이터보내기
-  async sendToQueue(msg) {
-    const sending = await this.channel.sendToQueue(
-      this._queueName,
-      this.encode(msg),
-      {
-        persistent: true,
-      }
-    );
-    return sending;
-  }
-
-    // queue에 있는 데이터 가져오기
-  async recvFromQueue() {
-    const message = await this.channel.get(this._queueName, {});
-    if (message) {
-      this.channel.ack(message);
-      console.log(message.content);
-      console.log(message.content.toString())
-      return message.content.toString();
-    } else {
-      return null;
+let globalArr = [];
+const timer = (i) => {
+  setTimeout(async() => {
+    console.log("checkVal :", i, "globalArr : ", globalArr.length);
+    if (i == globalArr.length) {
+      console.log("1초동안 응답x 여기다가 넣는 로직넣으면 됨")
+      try {
+        console.log(globalArr)
+        const rows = await chatting.bulkCreate(globalArr, {
+            ignoreDuplicates: true,
+          });
+          if(!rows) throw error
+          console.log(rows)
+          globalArr = [];
+        } catch (err) {
+          console.log(err, "잘못된 데이터로 인해 넣기 실패")
+       }
     }
-  }
-
-  // 문자를 Buffer로 바꿈
-  encode(doc) {
-    return Buffer.from(JSON.stringify(doc));
-  }
-
-  //Buffer를 문자를 바꿔주는 로직
-  async recvFromQueue() {
-    const message = await this.channel.get(this._queueName, {});
-    if (message) {
-      this.channel.ack(message);
-      console.log(message.content);
-      console.log(message.content.toString())
-      return message.content.toString();
-    } else {
-      return null;
-    }
-  }
-
-  // 메세지보내기
-  async send_message(msg) {
-    await this.setup(); //레빗엠큐 연결
-    await this.assertQueue(); //큐생성
-    await this.sendToQueue(msg); //생성큐메세지전달
-  }
-
-  // 메세지 가져오기
-  async recv_message() {
-    await this.setup();
-    return await this.recvFromQueue();
-  }
+  }, 1000);
 }
 
-module.exports = RabbitmqWrapper;
+module.exports = {
+  Produce : async (msg) => {
+    try {
+      console.log(msg ,"<<< mq func")
+      const conn = await amqp.connect(amqpURL)
+      const ch = await conn.createChannel()
+      const exchange = "web_exchange";
+      const q ="web_queue";
+      const routingKey = "web_routing_key";
+      await ch.assertExchange(exchange, 'direct', {durable: true}).catch((err) => console.log(error));
+      await ch.assertQueue(q, {durable:true});
+      await ch.bindQueue(q, exchange, routingKey)
+      await ch.publish(exchange, routingKey, Buffer.from(msg))
+    } catch (error) {
+      console.log(error)
+    }
+  },
+  Consume : async() => {
+    try {
+      const conn = await amqp.connect(amqpURL)
+      const ch = await conn.createChannel()
+      const q= "web_queue";
+      await ch.assertQueue(q, {durable: true});
+      await ch.consume(q, async (msg) => {
+        console.log(msg.content.toString());
+
+        globalArr.push(JSON.parse(msg.content.toString()))
+        console.log("여기이제 제이슨으로 다시 바꾼담에 디비에 넣는 로직 넣으면 됨");
+        timer (globalArr.length.toString());                
+        if (globalArr.length >= 5 ) { 
+            try {
+              console.log(globalArr)
+              const rows = await chatting.bulkCreate(globalArr, {
+                  ignoreDuplicates: true,
+                });
+                if(!rows) throw error
+                console.log(rows)
+                globalArr = [];
+              } catch (err) {
+                console.log(err, "잘못된 데이터로 인해 넣기 실패")
+             }
+        }
+        ch.ack(msg)
+      }, { consumerTag: 'web_consumer'})
+    } catch (error) {
+      console.log(error);
+    }
+  }
+}
